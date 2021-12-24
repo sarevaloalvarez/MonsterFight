@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html>
+    <title>Monster Fight</title>
+    <audio src='MagmaCave.mp3' type="audio/mpeg" id="bgMusic" preload='auto' controls='none' style='display:none'autoplay='true' loop='true'></audio>
+    <audio src='shot.mp3' type="audio/mpeg" id="shot" preload='auto' controls='none' style='display:none'></audio>
+    <audio src='death1.mp3' type="audio/mpeg" id="death1" preload='auto' controls='none' style='display:none'></audio>
+    <audio src='death2.mp3' type="audio/mpeg" id="death2" preload='auto' controls='none' style='display:none'></audio>
+    <style>
+        canvas{
+            
+            padding: 0;
+            margin: auto;
+            
+            
+            position: absolute;
+            top: 0;
+            
+            bottom: 0;
+            left: 0;
+            right: 0;
+        }
+    </style>
+
+    <script type="text/javascript" src="https://code.jquery.com/jquery-1.7.1.min.js"></script>
+    <script src='spritePlayer.js'></script>
+    <script src='Attacker.js'></script>
+    <script src='bullet.js'></script>
+    <script src= 'highScore.js'></script>
+   
+    <script>
+        
+        function keyUpHandler(e){
+				switch(e.keyCode){
+					case 37: keys.left=false;break;
+					case 39: keys.right=false;break;
+                    case 38: keys.up=false; break;
+                    case 16: keys.shift=false; break;
+				}
+			
+			}
+			function keyDownHandler(e){
+				switch(e.keyCode){
+					case 37: keys.left=true;  dir=-1;break;
+					case 39: keys.right=true;  dir=1;break;
+                    case 38: keys.up=true; break;
+                    case 16: keys.shift=true;break;
+				}
+			}
+        var canvas, ctx;
+        var background= new Image();
+        background.src='AcmeWarehouse.png';
+        var catImg=new Image();
+        catImg.src="cat_ar_base.png";
+        var cat, catX, catY,catSpeed,catFrameWidth,catFrameHeight,catnumCells;
+        var heart= new Image();
+        heart.src='heart.png';
+        
+        //monsters
+        var monsters;
+
+        var mon1=new Image();
+        mon1.src='monster.png';
+        var mon2= new Image();
+        mon2.src='flyingMonster64x64.png';
+        // game variables
+        var lives;
+        var keys;
+        var timing;
+        var score;
+        var bullets;
+        var dir;
+        var level;
+        //gameOver
+        var gO=new Image();
+        gO.src='gameOver.png';
+
+        var leaderboard;
+        var temp;
+        function initialize(){
+            bgMusic=document.getElementById('bgMusic').play();
+            canvas=document.getElementById('game');
+            ctx=canvas.getContext('2d');
+            document.getElementById('startButton').style.display= 'none';
+            ctx.font="15px Arial";
+            catX=100; catY=400; catSpeed=5; catFrameWidth=64; catFrameHeight=64; catNumCells=8;
+            cat=new SpritePlayer(catX, catY,catSpeed,catImg,catFrameWidth,catFrameHeight, catNumCells);
+
+            monsters=[];
+            bullets=[];
+            dir=1;
+
+            lives=5;
+            keys={
+                left:false,
+                right:false,
+                up:false,
+                shift:false
+            }
+            timing=0;
+            score=0;
+            level=1;
+            document.addEventListener("keydown", keyDownHandler);
+			document.addEventListener("keyup", keyUpHandler);
+            if (localStorage.getItem("highScores") === null) {
+                 temp = {'Scores':[], 'dict': {}};
+                 localStorage.setItem('highScores', JSON.stringify(temp));
+                }
+	
+            temp = JSON.parse(localStorage.getItem('highScores'));
+            leaderboard = new highScore(temp.Scores,temp.dict);
+            console.log(leaderboard);
+            update();
+         
+        }
+        function update(){
+            timing++;
+            // shoot bullet
+            if(keys.shift){
+                bullets.push(new Bullet(cat.x+32, cat.y+54, dir)); 
+                document.getElementById('shot').play();
+                keys.shift = false;
+            }
+            if(timing%20==0)
+                score++;
+            if(timing%60/level == 0){
+                addMonster();
+            }
+            if(timing%600==0)
+                level++;
+            for(var x=0;x<monsters.length;x++){
+                monsters[x].move(timing);
+                if(monsters[x].x>canvas.width || monsters[x].x<0 || monsters[x].y>canvas.height)
+                        monsters.splice(x, 1);
+                for(var i=0; i<bullets.length;i++){
+                    
+                    if(bullets[i].x<=0 || bullets[i].x>= canvas.width){
+                        bullets.splice(i,1);
+                        break;
+                    }
+
+                    bullets[i].move();
+                //monsterleft<=bulletX && monsterRight>=bulletX //&& monsterTop<=bulletY && monsterBottom>=bulletY
+                    if(monsters[x].getLeft()<= bullets[i].getX()&&
+                       monsters[x].getRight()>=bullets[i].getX() &&
+                       monsters[x].y<=bullets[i].y+10 &&
+                       monsters[x].y+72>=bullets[i].y){
+                            switch(monsters[x].getType()){
+                                
+                                case 0:
+                                    document.getElementById('death1').play();
+                                    break;
+                                case 1:
+                                    document.getElementById('death2').play();
+                                    
+                            }
+                            monsters.splice(x, 1); 
+                            bullets.splice(i, 1);
+                            score+=20;
+                            break;        
+                    }    
+                }
+                if(x>=monsters.length)
+                    continue;
+                if(monsters[x].getLeft()<=cat.x+36 && monsters[x].getRight()>= cat.x 
+                    && monsters[x].y<= cat.y+64 && monsters[x].y+32>=cat.y+26){
+                    lives--;
+                    monsters.splice(x,1);
+                    break;
+                    
+                }
+
+            }
+            
+            cat.move(canvas,keys,timing);
+            draw();
+            if(lives>0)
+					requestAnimationFrame(update);
+				if(lives<=0){
+                    timing = 0;
+					gameOverUpdate();
+				}
+        }
+        function addMonster(){
+            //level 1-2
+            if(level>=1 && level<=2)
+                monsters.push(new Attacker(mon1,1,410,2));
+            // level 3-5
+            else if(level>=3 && level<=5){
+                var rand=Math.random();
+                if(rand<.5)
+                    monsters.push(new Attacker(mon1,1,410,4));
+                if(rand>=.5)   
+                    monsters.push(new Attacker(mon2,0));
+            }
+            // level 5 and up
+            else{
+                var rand=Math.random();
+                if(rand<.5){
+                    monsters.push(new Attacker(mon1,1,410,4));
+                    monsters.push(new Attacker(mon1,1,410,4));
+                }
+                if(rand>=.5){   
+                    monsters.push(new Attacker(mon2,0));
+                    monsters.push(new Attacker(mon2,0));
+                }        
+            }
+           
+        }
+        function draw(){
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            ctx.drawImage(background,0,0);
+            cat.draw(ctx);
+            for(var i=0;i<lives;i++)
+                ctx.drawImage(heart,i*35-10,0,64,40);
+            for(var i =0;i<monsters.length;i++)
+                monsters[i].draw(ctx);
+            ctx.rect(540,0,100,55);
+            ctx.fillStyle='black';
+            ctx.fill();
+            ctx.fillStyle='white';
+            ctx.fillText("Score: "+score,545,25);
+            ctx.fillText("Level: "+level,545,45);
+
+            
+        }
+        function gameOverUpdate(){
+            timing++;
+            gameOverDraw();
+            requestAnimationFrame(gameOverUpdate);
+        }
+        var init; 
+        var score;
+        function gameOverDraw(){
+            ctx.drawImage(gO,0,0,canvas.width,canvas.height);
+            if(timing ==1) {
+                    init=prompt("Enter your Initials");
+                    if(init == null || init == '') init = "NaN";
+                    init=init.toUpperCase(); 
+                        if(init.length > 3) init=init.slice(0,3);  
+                    leaderboard.addScore(init,score);
+                    var temp = {'Scores':leaderboard.getHighScores(), 'dict': leaderboard.getDict()};
+                    localStorage.setItem('highScores', JSON.stringify(temp));
+
+                }
+            
+            
+	        if( timing % 100 >= 50 ){
+                ctx.beginPath();
+                ctx.fillStyle="#ff6700";
+			    ctx.font='40px serif';
+                ctx.fillText("High Scores",canvas.width/2-80, 44);
+                var j=0;
+                for(var i=0; i<leaderboard.highScores.length;i++){
+                    ctx.fillText(leaderboard.getHighScores()[i],canvas.width/2+80, j+100);
+                    ctx.fillText((i+1)+'     '+leaderboard.getNames()[i],canvas.width/2-160, j+100);
+                    j = j+60;
+                }
+                if(score <= 999) ctx.fillText("Score: "+init+" "+score,382,479);
+                else {ctx.fillText("Score: "+init+" "+score,372,479);}
+			    ctx.closePath();
+            }
+            else{
+                ctx.beginPath();
+                ctx.fillStyle="#ff6700";
+			    ctx.font='32px serif';
+                ctx.fillText("High Scores",canvas.width/2-72, 40);
+                var j=0;
+                for(var i=0; i<leaderboard.highScores.length;i++){
+                    ctx.fillText(leaderboard.getHighScores()[i],canvas.width/2+88, j+104);
+                    ctx.fillText((i+1)+'     '+leaderboard.getNames()[i],canvas.width/2-152, j+104);
+                    j = j+60;
+                }
+			    if(score<= 999) ctx.fillText("Score: "+init+" "+score,390,475);
+                else {ctx.fillText("Score: "+init+" "+score,380,479);}
+			    ctx.closePath();
+               
+            }
+            
+           
+        }
+    </script>
+
+<div id = 'initialScreen' class ='h-100'>
+    <div class = "d-flex flex-column align-items-center justify-content-center h-100">
+        <h1 style=' color: #FAF9F6;'>Monster Fight</h1>
+       
+        <button id= 'startButton'
+            style = "background-color: #188b55; color: white; width: 200px; height:70px; font-size: xx-large;"
+            onclick = 'initialize()'>
+            Start Game
+            
+         </button>
+    </div>
+</div>
+
+
+    
+
+<div>
+    <div style="position: absolute; width:200px; height:100px; font-size: x-large; color: #FAF9F6;">
+        Move with arrow keys, shoot with shift. Don't let the monsters get you! 
+    </div>
+    
+</div>
+
+
+    <body style= "background-color: #4e4943;">
+        <canvas id='game' width='640px' height='508px' display = 'none' ></canvas>
+    </body>
+
+    
+</html>
